@@ -6,9 +6,10 @@ import threading
 import os
 import itertools
 import traceback
+import datetime
 from tkinter import filedialog, messagebox
 
-# --- Check for admin rights ---
+# --- Check for admin rights (Windows only) ---
 def is_admin():
     try:
         return ctypes.windll.shell32.IsUserAnAdmin()
@@ -95,7 +96,7 @@ class PackageManagerGUI:
         self.root.title("Package Manager Overview & Update")
         self.info_frames = {}
 
-        # --- Spinner Label (NEU) ---
+        # --- Spinner Label (top) ---
         self.spinner_label = tk.Label(self.root, text="", font=("Consolas", 18))
         self.spinner_label.pack(pady=(5, 0))
 
@@ -108,7 +109,6 @@ class PackageManagerGUI:
         btn_frame.pack(side="top", fill="x")
         self.update_btn = tk.Button(btn_frame, text="Check & Update Packages", command=self.start_update_thread)
         self.update_btn.pack(side="left", padx=5)
-        # --- Export/Import Buttons mit Spinner ---
         self.export_btn = tk.Button(btn_frame, text="Export Packages", command=self.export_packages_thread)
         self.export_btn.pack(side="left", padx=5)
         self.import_btn = tk.Button(btn_frame, text="Import Packages", command=self.import_packages_thread)
@@ -131,7 +131,7 @@ class PackageManagerGUI:
             self.info_frames[manager]["updates"].pack(side="left", padx=10)
             self.info_frames[manager]["spinner"].pack(side="left", padx=10)
 
-    # --- Spinner-Logik für oben im Fenster ---
+    # --- Spinner logic for top spinner ---
     def start_top_spinner(self):
         self.spinner_label._spinner_cycle = itertools.cycle(['/', '-', '\\', '|'])
         self.spinner_label._running = True
@@ -147,7 +147,7 @@ class PackageManagerGUI:
     def stop_top_spinner(self):
         self.spinner_label._running = False
 
-    # --- Export/Import mit Ladeanimation ---
+    # --- Export/Import with loading animation ---
     def export_packages_thread(self):
         self.start_top_spinner()
         def do_export():
@@ -242,7 +242,14 @@ class PackageManagerGUI:
             if out:
                 pkgs = [line.strip() for line in out.splitlines() if line.strip()]
                 export_data[manager] = pkgs
-        file = filedialog.asksaveasfilename(defaultextension=".txt", filetypes=[("Text files", "*.txt")])
+        # Automatic filename with timestamp and .html extension
+        now = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M")
+        default_filename = f"packages_{now}.html"
+        file = filedialog.asksaveasfilename(
+            initialfile=default_filename,
+            defaultextension=".html",
+            filetypes=[("HTML Files", "*.html"), ("All Files", "*.*")]
+        )
         if file:
             with open(file, "w", encoding="utf-8") as f:
                 for manager, pkgs in export_data.items():
@@ -252,7 +259,9 @@ class PackageManagerGUI:
             self.root.after(0, lambda: messagebox.showinfo("Export", "Package list exported."))
 
     def import_packages(self):
-        file = filedialog.askopenfilename(filetypes=[("Text files", "*.txt")])
+        file = filedialog.askopenfilename(
+            filetypes=[("HTML Files", "*.html"), ("All Files", "*.*")]
+        )
         if not file:
             return
         with open(file, "r", encoding="utf-8") as f:
@@ -298,4 +307,3 @@ if __name__ == "__main__":
     root = tk.Tk()
     app = PackageManagerGUI(root)
     root.mainloop()
-
