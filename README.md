@@ -112,4 +112,8 @@ python every_update_1.0.0.py
 
 **Have fun managing your packages** 🚀
 
+<<<<<<< HEAD
 Translated with DeepL.com (free version)
+=======
+Translated with DeepL.com (free version)
+>>>>>>> 70e053529aa815f370915be822f17a2d03270971

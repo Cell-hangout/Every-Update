@@ -8,19 +8,22 @@ import itertools
 import traceback
 from tkinter import filedialog, messagebox
 
-# --- Check for admin rights ---
+# --- Check for admin rights (Windows only) ---
 def is_admin():
+    """Check if the script is running with administrator rights (Windows only)."""
     try:
         return ctypes.windll.shell32.IsUserAnAdmin()
     except Exception:
         return False
 
+# Relaunch as admin if not already (Windows only)
 if os.name == "nt" and not is_admin():
     ctypes.windll.shell32.ShellExecuteW(
         None, "runas", sys.executable, " ".join(sys.argv), None, 1)
     sys.exit()
 
 # --- Package manager commands ---
+# Define commands for each supported package manager
 package_managers = {
     "Chocolatey": {
         "check_command": "choco --version",
@@ -74,6 +77,7 @@ package_managers = {
 }
 
 def run_command(command):
+    """Run a shell command and return its output and error."""
     try:
         result = subprocess.run(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         output = result.stdout
@@ -85,35 +89,31 @@ def run_command(command):
         return "", traceback.format_exc()
 
 def show_env_info():
+    """Print environment variable info (for debugging)."""
     print("\n--- Environment Variables ---")
     print(f"PATH:\n{os.environ.get('PATH', '')}\n")
     sys.stdout.flush()
 
 class PackageManagerGUI:
+    """Main GUI class for package manager overview and update."""
     def __init__(self, root):
         self.root = root
         self.root.title("Package Manager Overview & Update")
         self.info_frames = {}
-
-        # --- Spinner Label (NEU) ---
-        self.spinner_label = tk.Label(self.root, text="", font=("Consolas", 18))
-        self.spinner_label.pack(pady=(5, 0))
-
         self.init_gui()
 
     def init_gui(self):
+        """Initialize the GUI layout and widgets."""
         top_frame = tk.Frame(self.root)
         top_frame.pack(padx=10, pady=10, fill="x")
         btn_frame = tk.Frame(top_frame)
         btn_frame.pack(side="top", fill="x")
         self.update_btn = tk.Button(btn_frame, text="Check & Update Packages", command=self.start_update_thread)
         self.update_btn.pack(side="left", padx=5)
-        # --- Export/Import Buttons mit Spinner ---
-        self.export_btn = tk.Button(btn_frame, text="Export Packages", command=self.export_packages_thread)
+        self.export_btn = tk.Button(btn_frame, text="Export Packages", command=self.export_packages)
         self.export_btn.pack(side="left", padx=5)
-        self.import_btn = tk.Button(btn_frame, text="Import Packages", command=self.import_packages_thread)
+        self.import_btn = tk.Button(btn_frame, text="Import Packages", command=self.import_packages)
         self.import_btn.pack(side="left", padx=5)
-
         info_frame = tk.Frame(self.root)
         info_frame.pack(padx=10, pady=10, fill="x")
         for manager in package_managers.keys():
@@ -131,47 +131,19 @@ class PackageManagerGUI:
             self.info_frames[manager]["updates"].pack(side="left", padx=10)
             self.info_frames[manager]["spinner"].pack(side="left", padx=10)
 
-    # --- Spinner-Logik für oben im Fenster ---
-    def start_top_spinner(self):
-        self.spinner_label._spinner_cycle = itertools.cycle(['/', '-', '\\', '|'])
-        self.spinner_label._running = True
-        self.animate_top_spinner()
-
-    def animate_top_spinner(self):
-        if getattr(self.spinner_label, "_running", False):
-            self.spinner_label.config(text=next(self.spinner_label._spinner_cycle))
-            self.spinner_label.after(100, self.animate_top_spinner)
-        else:
-            self.spinner_label.config(text="")
-
-    def stop_top_spinner(self):
-        self.spinner_label._running = False
-
-    # --- Export/Import mit Ladeanimation ---
-    def export_packages_thread(self):
-        self.start_top_spinner()
-        def do_export():
-            self.export_packages()
-            self.stop_top_spinner()
-        threading.Thread(target=do_export, daemon=True).start()
-
-    def import_packages_thread(self):
-        self.start_top_spinner()
-        def do_import():
-            self.import_packages()
-            self.stop_top_spinner()
-        threading.Thread(target=do_import, daemon=True).start()
-
     def start_update_thread(self):
+        """Start update process in a separate thread."""
         threading.Thread(target=self.update_all_managers, daemon=True).start()
 
     def start_spinner(self, manager):
+        """Start spinner animation for a package manager."""
         label = self.info_frames[manager]["spinner"]
         label._spinner_cycle = itertools.cycle(['/', '-', '\\', '|'])
         label._running = True
         self.animate_spinner(manager)
 
     def animate_spinner(self, manager):
+        """Animate spinner for visual feedback."""
         label = self.info_frames[manager]["spinner"]
         if getattr(label, "_running", False):
             label.config(text=next(label._spinner_cycle))
@@ -180,9 +152,11 @@ class PackageManagerGUI:
             label.config(text="")
 
     def stop_spinner(self, manager):
+        """Stop spinner animation."""
         self.info_frames[manager]["spinner"]._running = False
 
     def update_all_managers(self):
+        """Check and update all package managers."""
         show_env_info()
         for manager, cmds in package_managers.items():
             self.start_spinner(manager)
@@ -201,20 +175,24 @@ class PackageManagerGUI:
                     print(err)
                 self.stop_spinner(manager)
                 continue
+
             installed, inst_err = run_command(cmds["list_command"])
             installed_count = len([line for line in installed.splitlines() if line.strip()]) if installed else 0
             self.info_frames[manager]["installed"].config(text=f"Installed Packages: {installed_count}")
             print(f"Installed Packages: {installed_count}")
+
             outdated, outd_err = run_command(cmds["outdated_command"])
             outdated_count = len([line for line in outdated.splitlines() if line.strip()]) if outdated else 0
             self.info_frames[manager]["updates"].config(text=f"Updates Available: {outdated_count}")
             print(f"Updates Available: {outdated_count}")
+
             if err:
                 print("Error:", err)
             if inst_err:
                 print("Error:", inst_err)
             if outd_err:
                 print("Error:", outd_err)
+
             print(f"Updating packages...")
             sys.stdout.flush()
             update_out, update_err = run_command(cmds["update_command"])
@@ -222,6 +200,7 @@ class PackageManagerGUI:
                 print(update_out)
             if update_err:
                 print("Error:", update_err)
+
             if cmds["manager_update_command"]:
                 print(f"Updating {manager} itself...")
                 mgr_out, mgr_err = run_command(cmds["manager_update_command"])
@@ -236,6 +215,10 @@ class PackageManagerGUI:
         sys.stdout.flush()
 
     def export_packages(self):
+        """Export the list of installed packages to a text file in a separate thread."""
+        threading.Thread(target=self._export_packages_thread, daemon=True).start()
+
+    def _export_packages_thread(self):
         export_data = {}
         for manager, cmds in package_managers.items():
             out, _ = run_command(cmds["list_command"])
@@ -249,9 +232,11 @@ class PackageManagerGUI:
                     f.write(f"[{manager}]\n")
                     for pkg in pkgs:
                         f.write(pkg + "\n")
+            # Use after to show messagebox in main thread
             self.root.after(0, lambda: messagebox.showinfo("Export", "Package list exported."))
 
     def import_packages(self):
+        """Import and install packages from a previously exported text file."""
         file = filedialog.askopenfilename(filetypes=[("Text files", "*.txt")])
         if not file:
             return
@@ -265,6 +250,7 @@ class PackageManagerGUI:
                     pkgs[current_manager] = []
                 elif current_manager and line:
                     pkgs[current_manager].append(line)
+        # Install packages
         for manager, packages in pkgs.items():
             if manager in package_managers and packages:
                 print(f"Installing packages for {manager}:")
@@ -291,11 +277,11 @@ class PackageManagerGUI:
                         print(out)
                     if err:
                         print(err)
-        self.root.after(0, lambda: messagebox.showinfo("Import", "Packages installed (see terminal for details)."))
+        messagebox.showinfo("Import", "Packages installed (see terminal for details).")
 
 # --- Main program ---
 if __name__ == "__main__":
+    # Start the GUI application
     root = tk.Tk()
     app = PackageManagerGUI(root)
     root.mainloop()
-
